@@ -36,7 +36,7 @@ class Word2Vec:
         """
         self.data = InputData(input_file_name, min_count)
         self.output_file_name = output_file_name
-        self.emb_size = len(self.data.word2id)
+        self.emb_size = len(self.data.word2id) + 1
         self.emb_dimension = emb_dimension
         self.batch_size = batch_size
         self.window_size = window_size
@@ -58,6 +58,12 @@ class Word2Vec:
         pair_count = self.data.evaluate_pair_count(self.window_size)
         batch_count = self.iteration * pair_count / self.batch_size
         process_bar = tqdm(range(int(batch_count)))
+
+
+        contraints = [('男生', '女生')]
+        int_contraints = {}
+        int_contraints[self.data.word2id['男生']] = self.data.word2id['女生']
+        int_contraints[self.data.word2id['女生']] = self.data.word2id['男生']
         # self.skip_gram_model.save_embedding(
         #     self.data.id2word, 'begin_embedding.txt', self.use_cuda)
         for i in process_bar:
@@ -67,15 +73,23 @@ class Word2Vec:
             pos_u = [pair[0] for pair in pos_pairs]
             pos_v = [pair[1] for pair in pos_pairs]
 
+            constraint_u = [len(self.data.word2id) for pair in pos_pairs] # assuming these are zero vectors
+
+            for i, pos_u_i in enumerate(pos_u):
+                if pos_u_i in int_contraints:
+                    constraint_u[i] = int_contraints[pos_u_i] # e.g., 男 -> constraint 女
+
             pos_u = Variable(torch.LongTensor(pos_u))
             pos_v = Variable(torch.LongTensor(pos_v))
             neg_v = Variable(torch.LongTensor(neg_v))
+            constraint_u = Variable(torch.LongTensor(constraint_u))
             if self.use_cuda:
                 pos_u = pos_u.cuda()
                 pos_v = pos_v.cuda()
                 neg_v = neg_v.cuda()
 
             self.optimizer.zero_grad()
+            #loss = self.skip_gram_model.forward(pos_u, pos_v, neg_v, constraint_u)
             loss = self.skip_gram_model.forward(pos_u, pos_v, neg_v)
             loss.backward()
             self.optimizer.step()

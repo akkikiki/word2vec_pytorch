@@ -43,10 +43,10 @@ class SkipGramModel(nn.Module):
             None
         """
         initrange = 0.5 / self.emb_dimension
-        self.u_embeddings.weight.data.uniform_(-initrange, initrange)
-        self.v_embeddings.weight.data.uniform_(-0, 0)
+        self.u_embeddings.weight.data.uniform_(-0, 0)
+        self.v_embeddings.weight.data.uniform_(-initrange, initrange)
 
-    def forward(self, pos_u, pos_v, neg_v):
+    def forward(self, pos_u, pos_v, neg_v, constraint_u=None):
         """Forward process.
 
         As pytorch designed, all variables must be batch format, so all input of this method is a list of word id.
@@ -56,6 +56,7 @@ class SkipGramModel(nn.Module):
             pos_v: list of neibor word ids for positive word pairs.
             neg_u: list of center word ids for negative word pairs.
             neg_v: list of neibor word ids for negative word pairs.
+            contrain_u: list of constrai word ids for positive word pairs.
 
         Returns:
             Loss of this process, a pytorch variable.
@@ -68,7 +69,14 @@ class SkipGramModel(nn.Module):
         neg_emb_v = self.v_embeddings(neg_v)
         neg_score = torch.bmm(neg_emb_v, emb_u.unsqueeze(2)).squeeze()
         neg_score = F.logsigmoid(-1 * neg_score)
-        return -1 * (torch.sum(score)+torch.sum(neg_score))
+
+        if constraint_u is None:
+            constraint_score = torch.FloatTensor([0])
+        else:
+            emb_constraint_u = self.u_embeddings(constraint_u)
+            constraint_score = torch.mul(emb_constraint_u, emb_u).squeeze()
+            constraint_score = F.logsigmoid(-1 * constraint_score) # make it farther
+        return -1 * (torch.sum(score)+torch.sum(neg_score)+ 0.01 * torch.sum(constraint_score))
 
     def save_embedding(self, id2word, file_name, use_cuda):
         """Save all embeddings to file.
